@@ -8,6 +8,7 @@ from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import retriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_experimental.text_splitter import SemanticChunker
 from pprint import pprint
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
@@ -37,13 +38,24 @@ MARKDOWN_SEPARATOR = [
     " ",
     "",
 ]
+#Split Documents
+# text_splitter = RecursiveCharacterTextSplitter(
+#     chunk_size=1200,
+#     chunk_overlap=200,
+#     add_start_index=True,
+#     strip_whitespace=True,
+#     separators=MARKDOWN_SEPARATOR,
+# )
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1200,
-    chunk_overlap=200,
-    add_start_index=True,
-    strip_whitespace=True,
-    separators=MARKDOWN_SEPARATOR,
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-small", # Dùng bản small cho nhẹ, giống bên example.py
+    base_url="https://openrouter.ai/api/v1",
+    chunk_size=16, # QUAN TRỌNG: Chia nhỏ lô gửi đi để tránh bị OpenRouter chặn vì payload quá lớn
+)
+
+text_splitter = SemanticChunker(
+    embeddings=embeddings,
+    breakpoint_threshold_amount=0.85
 )
 
 splits = text_splitter.split_documents(docs)
@@ -51,11 +63,7 @@ splits = text_splitter.split_documents(docs)
 # BẮT BUỘC: Lọc bỏ các đoạn text rỗng để tránh lỗi "No embedding data received"
 splits = [s for s in splits if len(s.page_content.strip()) > 0]
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small", # Dùng bản small cho nhẹ, giống bên example.py
-    base_url="https://openrouter.ai/api/v1",
-    chunk_size=16, # QUAN TRỌNG: Chia nhỏ lô gửi đi để tránh bị OpenRouter chặn vì payload quá lớn
-)
+
 
 vectorstore = FAISS.from_documents(
     documents=splits, embedding=embeddings, distance_strategy=DistanceStrategy.COSINE

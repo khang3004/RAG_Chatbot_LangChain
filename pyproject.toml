@@ -13,4 +13,5 @@ dependencies = [
     "pypdf>=6.11.0",
     "unstructured[pdf]>=0.22.27",
     "onnxruntime<1.26.0",
+    "langchain-experimental>=0.4.1",
 ]
