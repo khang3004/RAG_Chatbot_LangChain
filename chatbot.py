@@ -53,23 +53,37 @@ embeddings = OpenAIEmbeddings(
     chunk_size=16, # QUAN TRỌNG: Chia nhỏ lô gửi đi để tránh bị OpenRouter chặn vì payload quá lớn
 )
 
-text_splitter = SemanticChunker(
-    embeddings=embeddings,
-    breakpoint_threshold_amount=0.85
-)
+import os
 
-splits = text_splitter.split_documents(docs)
+FAISS_INDEX_PATH = "faiss_index"
 
-# BẮT BUỘC: Lọc bỏ các đoạn text rỗng để tránh lỗi "No embedding data received"
-splits = [s for s in splits if len(s.page_content.strip()) > 0]
+if os.path.exists(FAISS_INDEX_PATH):
+    print("Loading existing FAISS index from disk...")
+    vectorstore = FAISS.load_local(
+        folder_path=FAISS_INDEX_PATH, 
+        embeddings=embeddings, 
+        allow_dangerous_deserialization=True # Cần thiết cho phiên bản FAISS mới
+    )
+else:
+    print("Creating new FAISS index and saving to disk...")
+    text_splitter = SemanticChunker(
+        embeddings=embeddings,
+        breakpoint_threshold_amount=0.85
+    )
 
+    splits = text_splitter.split_documents(docs)
 
+    # BẮT BUỘC: Lọc bỏ các đoạn text rỗng để tránh lỗi "No embedding data received"
+    splits = [s for s in splits if len(s.page_content.strip()) > 0]
 
-vectorstore = FAISS.from_documents(
-    documents=splits, embedding=embeddings, distance_strategy=DistanceStrategy.COSINE
-)
+    vectorstore = FAISS.from_documents(
+        documents=splits, embedding=embeddings, distance_strategy=DistanceStrategy.COSINE
+    )
+    # Lưu lại để dùng cho lần sau
+    vectorstore.save_local(FAISS_INDEX_PATH)
 
-retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+# Tăng k=10 để lấy được nhiều context hơn, bù đắp cho việc chunk có thể bị đứt gãy ngữ cảnh
+retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 10})
 
 template = (
     "You are a strict, citation-focused assistant for a private knowledge base.\n"
